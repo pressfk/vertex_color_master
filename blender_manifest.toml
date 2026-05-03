@@ -1,0 +1,13 @@
+schema_version = "1.0.0"
+
+version = "0.11.0"
+id = "vertex_color_master"
+name = "Vertex Color Master (custom build)"
+tagline = "Isolate / mask / blur vertex color channels in Vertex Paint"
+maintainer = "pressfk (custom build, original by Andrew Palmer)"
+type = "add-on"
+tags = ["Paint"]
+blender_version_min = "3.6.0"
+license = [
+  "SPDX:GPL-3.0-or-later",
+]

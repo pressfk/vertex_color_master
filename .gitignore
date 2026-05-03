@@ -1,0 +1,34 @@
+# Local Claude / private handoff
+.claude/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Blender runtime backups
+*.blend1
+*.blend2
+*.blend@
+*.blend~
+
+# Local logs / diagnostics
+logs/*.log
+logs/*.log.*
+logs/vcm_diagnostics_*.txt
+!logs/.gitkeep
+
+# Updater runtime backup folder
+backup/
+
+# Release / build artifacts
+dist/
+build/
+*.zip
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
