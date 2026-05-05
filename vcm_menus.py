@@ -354,7 +354,8 @@ class VERTEXCOLORMASTER_MT_PieMain(Menu):
 
 def draw_brush_settings(context, layout, obj, settings, mode='STANDARD',
                         pie=False):
-    brush = context.tool_settings.vertex_paint.brush
+    from .vcm_helpers import get_active_vp_brush
+    brush = get_active_vp_brush(context)
     col = layout.column()
     row = col.row()
     if pie:
@@ -379,8 +380,11 @@ def draw_brush_settings(context, layout, obj, settings, mode='STANDARD',
         row.operator('paint.vertex_color_set', text="Fill With Value")
     else:
         row = col.row(align=True)
-        row.prop(brush, 'color', text="")
-        row.prop(brush, 'secondary_color', text="")
+        if brush is not None:
+            row.prop(brush, 'color', text="")
+            row.prop(brush, 'secondary_color', text="")
+        else:
+            row.label(text="No active brush", icon='INFO')
         row.separator()
         row.operator('vertexcolormaster.brush_colors_flip',
                      text="", icon='FILE_REFRESH')

@@ -220,8 +220,8 @@ Toggle in `Edit → Preferences → Add-ons → Vertex Color Master`:
 - **HUD Scale** text size multiplier (0.5 – 2.5, default 1.0)
 
 Disabling HUD does not disable any operator — Blender's normal Info-bar
-`self.report()` messages and the `vcm_debug.log` entries are still
-emitted.
+`self.report()` messages still fire. `vcm_debug.log` entries are only
+written while Debug Mode is enabled (see **Logs** below).
 
 ## Hotkeys
 
@@ -264,28 +264,36 @@ See `HOTKEYS.md` for the same table standalone.
 
 Diagnostic file: `<addon>/logs/vcm_debug.log`.
 
-The log auto-rotates at ~2 MB; up to 3 numbered backups are kept
-(`vcm_debug.log.1`, `.2`, `.3`). The active file is always
-`vcm_debug.log`.
+**File logging is OFF by default** as of v0.11.1. A clean install does
+not create the log file or grow one in the background. Enable
+**Debug Mode** in addon preferences to start writing the file; disable
+it to stop. While Debug Mode is on the log auto-rotates at ~2 MB with
+up to 3 numbered backups (`vcm_debug.log.1`, `.2`, `.3`). The active
+file is always `vcm_debug.log`.
 
 In addon prefs:
 
-- **Debug Mode** toggle — when ON, DEBUG-level messages are written.
-- **Open Logs Folder** — opens the folder in the OS file browser.
-- **Clear Log File** — truncates the active log; kept backups are
-  untouched.
+- **Debug Mode (enable file logging)** — toggle file logging on / off.
+  When ON, DEBUG-level messages are written. When OFF, no file
+  handler is attached.
+- **Open Logs Folder** — opens the folder in the OS file browser
+  (creates it on demand even when logging is off).
+- **Clear Log File** — truncates the active log (creates an empty
+  one if absent); kept backups are untouched.
 - **Copy Diagnostics Summary** — clipboards a compact text snapshot
   (addon version, Blender version, active object / attribute / domain,
   channel mask, isolate state + dirty flag, hotkey table, POINT
-  support list, last 20 log lines).
+  support list, last 20 log lines if a log file exists).
 - **Save Diagnostics Summary** — writes the same snapshot to a
   timestamped `vcm_diagnostics_*.txt` next to the log file.
 
 The same `Logs Folder`, `Clear Log` and `Copy Diagnostics` buttons are
 also available in the panel's `Help / Misc` box.
 
-`WARNING`, `ERROR`, and `EXCEPTION` entries are always written, regardless
-of Debug Mode.
+When Debug Mode is OFF, `WARNING`, `ERROR`, and `EXCEPTION` entries
+still print to Blender's system console and are surfaced via the
+operator `report()` and the HUD — the file is the only thing that's
+muted.
 
 ## Geometry Mask Generator
 

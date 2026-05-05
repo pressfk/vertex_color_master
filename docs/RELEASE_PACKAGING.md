@@ -8,15 +8,19 @@ existing `scripts/addons/vertex_color_master/` install.
 
 ## Versioning rules
 
-The version must stay in sync across **three** places:
+The version must stay in sync across **two** places (the
+`blender_manifest.toml` was removed in v0.11.0 because it caused Blender
+4.5 to install VCM as an Extension into `extensions/user_default/...`,
+which is not the legacy install path the team uses):
 
 | Location | Format | Example |
 |---|---|---|
 | `__init__.py` → `bl_info["version"]` | tuple of ints | `(0, 11, 1)` |
-| `blender_manifest.toml` → `version` | dotted string | `"0.11.1"` |
 | Git tag pushed to GitHub | `v` + dotted | `v0.11.1` |
 
-Bump **all three** in the same commit. The updater compares
+Plus the matching `docs/RELEASE_NOTES_v<...>.md` filename.
+
+Bump **all** in the same commit. The updater compares
 `bl_info["version"]` (tuple) against the GitHub tag name; mismatch causes
 the user to see "no updates" or "always behind".
 
@@ -29,13 +33,16 @@ The release ZIP must contain a single top-level directory named
 vertex_color_master.zip
 └── vertex_color_master/
     ├── __init__.py
-    ├── blender_manifest.toml
     ├── addon_updater.py
     ├── vcm_updater.py
     ├── vcm_*.py
     ├── docs/
     └── HOTKEYS.md
 ```
+
+**Do NOT include** `blender_manifest.toml` — its presence forces Blender
+4.5 to treat the add-on as an Extension and install it under
+`extensions/user_default/vertex_color_master`, which is the wrong path.
 
 **Exclude** from the ZIP:
 
@@ -65,7 +72,7 @@ this PoC iteration.
 
 ## Release checklist
 
-1. Bump version in `__init__.py` AND `blender_manifest.toml` (must match).
+1. Bump version in `__init__.py` (`bl_info["version"]` tuple).
 2. Commit, e.g. `git commit -m "VCM: bump 0.11.1"`.
 3. Tag: `git tag v0.11.1`.
 4. Push: `git push && git push --tags`.

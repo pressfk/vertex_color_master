@@ -21,7 +21,14 @@ import bpy
 from bpy.props import *
 from mathutils import Color
 from .vcm_globals import *
-from .vcm_helpers import rgb_to_luminosity
+from .vcm_helpers import (
+    rgb_to_luminosity,
+    get_active_vp_brush,
+    get_brush_color,
+    get_brush_secondary_color,
+    set_brush_color,
+    set_brush_secondary_color,
+)
 
 # VERTEXCOLORMASTER_Properties
 class VertexColorMasterProperties(bpy.types.PropertyGroup):
@@ -41,33 +48,37 @@ class VertexColorMasterProperties(bpy.types.PropertyGroup):
         if blue_id in active_channels:
             draw_color[2] = 1.0
 
-        context.tool_settings.vertex_paint.brush.color = draw_color
+        if get_active_vp_brush(context) is None:
+            return None
+        set_brush_color(context, draw_color)
 
         return None
 
     def update_brush_value_isolate(self, context):
-        brush = context.tool_settings.vertex_paint.brush
+        if get_active_vp_brush(context) is None:
+            return None
         v1 = self.brush_value_isolate
         v2 = self.brush_secondary_value_isolate
-        brush.color = Color((v1, v1, v1))
-        brush.secondary_color = Color((v2, v2, v2))
+        set_brush_color(context, (v1, v1, v1))
+        set_brush_secondary_color(context, (v2, v2, v2))
 
         return None
 
     def toggle_grayscale(self, context):
-        brush = context.tool_settings.vertex_paint.brush
+        if get_active_vp_brush(context) is None:
+            return None
 
         if self.use_grayscale:
-            self.brush_color = brush.color
-            self.brush_secondary_color = brush.secondary_color
+            self.brush_color = get_brush_color(context)
+            self.brush_secondary_color = get_brush_secondary_color(context)
 
             v1 = self.brush_value_isolate
             v2 = self.brush_secondary_value_isolate
-            brush.color = Color((v1, v1, v1))
-            brush.secondary_color = Color((v2, v2, v2))
+            set_brush_color(context, (v1, v1, v1))
+            set_brush_secondary_color(context, (v2, v2, v2))
         else:
-            brush.color = self.brush_color
-            brush.secondary_color = self.brush_secondary_color
+            set_brush_color(context, self.brush_color)
+            set_brush_secondary_color(context, self.brush_secondary_color)
 
         return None
 

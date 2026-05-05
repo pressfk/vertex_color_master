@@ -42,6 +42,114 @@ from .vcm_globals import *
 from .vcm_log import logger, log_vcol_info
 
 
+# ---------------------------------------------------------------------------
+# Brush color access (Blender 4.3+ brush-asset / unified-paint compatibility)
+# ---------------------------------------------------------------------------
+#
+# Blender 4.3 reworked vertex paint brushes into asset-shelf brushes; from
+# 4.5 onward `bpy.data.brushes['Draw']` is no longer reliably the active
+# brush, and Unified Paint Settings can intercept color reads/writes when
+# `use_unified_color` is True. These helpers route every brush color
+# read/write through the active brush + unified flag, so VCM stays
+# synchronised with what the user actually sees in the brush panel.
+
+def get_active_vp_brush(context):
+    """Return the active Vertex Paint brush, or None if unavailable."""
+    ts = getattr(context, 'tool_settings', None)
+    if ts is None:
+        return None
+    vp = getattr(ts, 'vertex_paint', None)
+    if vp is None:
+        return None
+    return getattr(vp, 'brush', None)
+
+
+def _unified_settings(context):
+    ts = getattr(context, 'tool_settings', None)
+    if ts is None:
+        return None
+    return getattr(ts, 'unified_paint_settings', None)
+
+
+def get_brush_color(context, brush=None):
+    """Read primary brush color; honors Unified Paint Settings if enabled."""
+    if brush is None:
+        brush = get_active_vp_brush(context)
+    ups = _unified_settings(context)
+    if ups is not None and getattr(ups, 'use_unified_color', False):
+        return tuple(ups.color)
+    if brush is None:
+        return (1.0, 1.0, 1.0)
+    return tuple(brush.color)
+
+
+def get_brush_secondary_color(context, brush=None):
+    """Read secondary brush color; honors Unified Paint Settings if enabled."""
+    if brush is None:
+        brush = get_active_vp_brush(context)
+    ups = _unified_settings(context)
+    if ups is not None and getattr(ups, 'use_unified_color', False):
+        return tuple(ups.secondary_color)
+    if brush is None:
+        return (0.0, 0.0, 0.0)
+    return tuple(brush.secondary_color)
+
+
+def _coerce_color3(value):
+    # Accept tuple / list / Color / Vector / bpy_prop_array / scalar.
+    try:
+        n = len(value)
+        seq = value
+    except TypeError:
+        x = float(value)
+        return (x, x, x)
+    if n >= 3:
+        return (float(seq[0]), float(seq[1]), float(seq[2]))
+    if n == 0:
+        return (0.0, 0.0, 0.0)
+    x = float(seq[0])
+    return (x, x, x)
+
+
+def set_brush_color(context, value, brush=None):
+    """Write primary brush color to brush AND unified (when unified active)."""
+    if brush is None:
+        brush = get_active_vp_brush(context)
+    rgb = _coerce_color3(value)
+    ups = _unified_settings(context)
+    # Always mirror to the brush so per-brush state stays correct, AND to
+    # unified settings when the user has enabled unified color — Blender
+    # reads from whichever is active for the painting display.
+    if brush is not None:
+        try:
+            brush.color = rgb
+        except Exception as e:
+            logger.warning("VCM brush color write failed: %s", e)
+    if ups is not None and getattr(ups, 'use_unified_color', False):
+        try:
+            ups.color = rgb
+        except Exception as e:
+            logger.warning("VCM unified color write failed: %s", e)
+
+
+def set_brush_secondary_color(context, value, brush=None):
+    """Write secondary brush color to brush AND unified (when unified active)."""
+    if brush is None:
+        brush = get_active_vp_brush(context)
+    rgb = _coerce_color3(value)
+    ups = _unified_settings(context)
+    if brush is not None:
+        try:
+            brush.secondary_color = rgb
+        except Exception as e:
+            logger.warning("VCM brush secondary write failed: %s", e)
+    if ups is not None and getattr(ups, 'use_unified_color', False):
+        try:
+            ups.secondary_color = rgb
+        except Exception as e:
+            logger.warning("VCM unified secondary write failed: %s", e)
+
+
 # VCM-ISO_<MASK>_<original-name>, where MASK is 1..4 letters from RGBA.
 _VCM_ISO_RE = re.compile(r'^VCM-ISO_([RGBA]{1,4})_(.+)$')
 

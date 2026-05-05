@@ -230,15 +230,17 @@ class VERTEXCOLORMASTER_OT_Gradient(bpy.types.Operator):
 
         if self._handle is None:
             if event.type == 'LEFTMOUSE':
-                brush = context.tool_settings.vertex_paint.brush
-                self.start_color = brush.color
-                self.end_color = brush.secondary_color
+                brush = get_active_vp_brush(context)
+                primary = get_brush_color(context, brush)
+                secondary = get_brush_secondary_color(context, brush)
+                self.start_color = primary
+                self.end_color = secondary
 
                 mouse_position = Vector((event.mouse_region_x, event.mouse_region_y))
                 self.line_params = {
                     "coords": [mouse_position, mouse_position],
-                    "colors": [brush.color[:] + (1.0,),
-                               brush.secondary_color[:] + (1.0,)],
+                    "colors": [tuple(primary) + (1.0,),
+                               tuple(secondary) + (1.0,)],
                     "width": 1,
                 }
                 args = (self, context, self.line_params, self.line_shader,
@@ -1272,27 +1274,64 @@ class VERTEXCOLORMASTER_OT_EditBrushSettings(bpy.types.Operator):
         return _vcm_poll(context)
 
     def execute(self, context):
-        brush_name = 'Draw'
-        if brush_name not in bpy.data.brushes:
-            self.report({'ERROR'}, "Default brush 'Draw' not found.")
-            return {'CANCELLED'}
-
-        brush = bpy.data.brushes[brush_name]
+        # Resolve target brush from active vertex-paint brush first (Blender
+        # 4.3+ moved brushes to assets — `bpy.data.brushes['Draw']` is no
+        # longer guaranteed to exist or to be the live active brush).
+        prev_brush = get_active_vp_brush(context)
+        prev_color = get_brush_color(context, prev_brush)
+        prev_secondary = get_brush_secondary_color(context, prev_brush)
 
         if self.blend_mode == 'BLUR':
-            if 'Blur' in bpy.data.brushes:
-                brush = bpy.data.brushes['Blur']
-            else:
-                self.report({'ERROR'}, "Blur brush not found.")
+            blur = bpy.data.brushes.get('Blur')
+            if blur is None:
+                blur = next(
+                    (b for b in bpy.data.brushes
+                     if getattr(b, 'use_paint_vertex', False)
+                     and getattr(b, 'vertex_tool', '') == 'BLUR'),
+                    None)
+            if blur is None:
+                self.report({'WARNING'},
+                    "Blur brush not found in this Blender build.")
                 return {'CANCELLED'}
+            brush = blur
         else:
-            brush.vertex_tool = 'DRAW'
-            brush.blend = self.blend_mode
+            brush = prev_brush
+            if brush is None:
+                # Fallback: any vertex-paint Draw brush in the data block.
+                brush = bpy.data.brushes.get('Draw')
+                if brush is None:
+                    brush = next(
+                        (b for b in bpy.data.brushes
+                         if getattr(b, 'use_paint_vertex', False)
+                         and getattr(b, 'vertex_tool', '') == 'DRAW'),
+                        None)
+            if brush is None:
+                self.report({'WARNING'},
+                    "No vertex paint Draw brush available.")
+                return {'CANCELLED'}
+            try:
+                brush.vertex_tool = 'DRAW'
+                brush.blend = self.blend_mode
+            except Exception as e:
+                logger.warning(
+                    "VCM EditBrushSettings: could not set blend mode: %s", e)
 
-        prev_brush = context.tool_settings.vertex_paint.brush
-        brush.color = prev_brush.color
-        brush.secondary_color = prev_brush.secondary_color
-        context.tool_settings.vertex_paint.brush = brush
+        # Mirror the user's existing color onto the new brush, then make it
+        # active. Use helpers so unified-paint state stays in sync.
+        try:
+            brush.color = prev_color
+            brush.secondary_color = prev_secondary
+        except Exception as e:
+            logger.warning(
+                "VCM EditBrushSettings: brush color copy failed: %s", e)
+        try:
+            context.tool_settings.vertex_paint.brush = brush
+        except Exception as e:
+            logger.warning(
+                "VCM EditBrushSettings: could not activate brush: %s", e)
+            self.report({'WARNING'},
+                "Could not activate brush: {0}".format(e))
+            return {'CANCELLED'}
 
         return {'FINISHED'}
 
@@ -1397,8 +1436,9 @@ def _internal_discard_active_isolate(mesh, settings, brush, context):
 
     if brush is not None:
         try:
-            brush.color = settings.brush_color
-            brush.secondary_color = settings.brush_secondary_color
+            set_brush_color(context, settings.brush_color, brush)
+            set_brush_secondary_color(
+                context, settings.brush_secondary_color, brush)
         except Exception:
             pass
 
@@ -1530,7 +1570,7 @@ class VERTEXCOLORMASTER_OT_IsolateChannel(bpy.types.Operator):
             self.report({'WARNING'}, reason)
             return {'CANCELLED'}
         if action == 'AUTO':
-            brush = context.tool_settings.vertex_paint.brush
+            brush = get_active_vp_brush(context)
             if not _internal_discard_active_isolate(
                     mesh, settings, brush, context):
                 self.report(
@@ -1615,11 +1655,14 @@ class VERTEXCOLORMASTER_OT_IsolateChannel(bpy.types.Operator):
 
         # --- Activate the isolate attribute and switch brush to grayscale ---
         mesh.color_attributes.active_color = iso_vcol
-        brush = context.tool_settings.vertex_paint.brush
-        settings.brush_color = brush.color
-        settings.brush_secondary_color = brush.secondary_color
-        brush.color = [settings.brush_value_isolate] * 3
-        brush.secondary_color = [settings.brush_secondary_value_isolate] * 3
+        brush = get_active_vp_brush(context)
+        settings.brush_color = get_brush_color(context, brush)
+        settings.brush_secondary_color = get_brush_secondary_color(context, brush)
+        if brush is not None:
+            v1 = settings.brush_value_isolate
+            v2 = settings.brush_secondary_value_isolate
+            set_brush_color(context, (v1, v1, v1), brush)
+            set_brush_secondary_color(context, (v2, v2, v2), brush)
 
         # --- Fingerprint the temp so smart-switch can later detect edits ---
         # Single-channel iso temps broadcast the source value to RGB; we
@@ -1729,7 +1772,7 @@ class VERTEXCOLORMASTER_OT_IsolateChannelMask(bpy.types.Operator):
             self.report({'WARNING'}, reason)
             return {'CANCELLED'}
         if action == 'AUTO':
-            brush = context.tool_settings.vertex_paint.brush
+            brush = get_active_vp_brush(context)
             if not _internal_discard_active_isolate(
                     mesh, settings, brush, context):
                 self.report(
@@ -1819,13 +1862,15 @@ class VERTEXCOLORMASTER_OT_IsolateChannelMask(bpy.types.Operator):
         mesh.color_attributes.active_color = iso_vcol
 
         # Save brush colors so Apply/Discard can always restore safely.
-        brush = context.tool_settings.vertex_paint.brush
-        settings.brush_color = brush.color
-        settings.brush_secondary_color = brush.secondary_color
+        brush = get_active_vp_brush(context)
+        settings.brush_color = get_brush_color(context, brush)
+        settings.brush_secondary_color = get_brush_secondary_color(context, brush)
         # Single-channel: switch to grayscale brush. Multi-channel: keep RGB.
-        if len(mask) == 1:
-            brush.color = [settings.brush_value_isolate] * 3
-            brush.secondary_color = [settings.brush_secondary_value_isolate] * 3
+        if len(mask) == 1 and brush is not None:
+            v1 = settings.brush_value_isolate
+            v2 = settings.brush_secondary_value_isolate
+            set_brush_color(context, (v1, v1, v1), brush)
+            set_brush_secondary_color(context, (v2, v2, v2), brush)
 
         # --- Fingerprint the temp so smart-switch can later detect edits ---
         try:
@@ -1917,9 +1962,11 @@ class VERTEXCOLORMASTER_OT_ApplyIsolatedChannel(bpy.types.Operator):
         mask = vcol_info[1]
 
         # Restore brush colors (saved during isolate; safe no-op for multi-mask).
-        brush = context.tool_settings.vertex_paint.brush
-        brush.color = settings.brush_color
-        brush.secondary_color = settings.brush_secondary_color
+        brush = get_active_vp_brush(context)
+        if brush is not None:
+            set_brush_color(context, settings.brush_color, brush)
+            set_brush_secondary_color(
+                context, settings.brush_secondary_color, brush)
 
         if self.discard:
             try:
@@ -2024,7 +2071,11 @@ class VERTEXCOLORMASTER_OT_FlipBrushColors(bpy.types.Operator):
         return obj is not None and obj.mode == 'VERTEX_PAINT'
 
     def execute(self, context):
-        brush = context.tool_settings.vertex_paint.brush
+        brush = get_active_vp_brush(context)
+        if brush is None:
+            self.report({'WARNING'},
+                "No active vertex paint brush to flip.")
+            return {'CANCELLED'}
         settings = context.scene.vertex_color_master_settings
 
         obj = context.active_object
@@ -2039,12 +2090,13 @@ class VERTEXCOLORMASTER_OT_FlipBrushColors(bpy.types.Operator):
             v2 = settings.brush_secondary_value_isolate
             settings.brush_value_isolate = v2
             settings.brush_secondary_value_isolate = v1
-            brush.color = Color((v2, v2, v2))
-            brush.secondary_color = Color((v1, v1, v1))
+            set_brush_color(context, (v2, v2, v2), brush)
+            set_brush_secondary_color(context, (v1, v1, v1), brush)
         else:
-            color = Color(brush.color)
-            brush.color = brush.secondary_color
-            brush.secondary_color = color
+            primary = get_brush_color(context, brush)
+            secondary = get_brush_secondary_color(context, brush)
+            set_brush_color(context, secondary, brush)
+            set_brush_secondary_color(context, primary, brush)
 
         return {'FINISHED'}
 

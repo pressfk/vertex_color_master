@@ -17,8 +17,13 @@
 
 # Unified diagnostic logging for Vertex Color Master.
 #
-# - Console + file handlers, both controlled by a single Debug Mode flag.
-# - Persistent log file at: <addon_dir>/logs/vcm_debug.log
+# - Console handler is always attached at WARNING level so ERRORs and
+#   EXCEPTIONs still surface in Blender's system console regardless of mode.
+# - File handler at <addon_dir>/logs/vcm_debug.log is OPT-IN: it is only
+#   attached when Debug Mode is enabled, so a clean install never grows
+#   a log file or creates the logs/ folder.
+# - Toggling Debug Mode at runtime attaches / detaches the file handler
+#   on demand.
 # - Idempotent setup: safe to call setup_logging() multiple times (F8 reload).
 # - Falls back to console-only if file logging fails for any reason.
 # - Custom EXCEPTION level so caught exceptions render as [EXCEPTION].
@@ -113,16 +118,71 @@ def teardown_logging():
         _safe_close(h)
 
 
+def _attach_file_handler():
+    """Create and attach the file handler if not already attached.
+
+    Returns True when the handler is now attached. Emits a single WARNING
+    to the console if file setup fails and falls back to console-only.
+    """
+    global _file_handler, _file_setup_failed
+    if _file_handler is not None:
+        return True
+
+    logs_dir = _ensure_logs_dir()
+    if logs_dir is None:
+        _file_setup_failed = True
+        return False
+
+    log_path = get_log_path()
+    try:
+        _file_handler = logging.handlers.RotatingFileHandler(
+            log_path, mode='a', encoding='utf-8',
+            maxBytes=_LOG_MAX_BYTES,
+            backupCount=_LOG_BACKUP_COUNT,
+            delay=True)
+        _file_handler.setFormatter(_FORMATTER)
+        logger.addHandler(_file_handler)
+        _file_setup_failed = False
+        return True
+    except Exception as e:
+        try:
+            _file_handler = logging.FileHandler(
+                log_path, mode='a', encoding='utf-8', delay=True)
+            _file_handler.setFormatter(_FORMATTER)
+            logger.addHandler(_file_handler)
+            logger.warning(
+                "VCM logging: rotation init failed (%s) — using plain "
+                "FileHandler.", e)
+            _file_setup_failed = False
+            return True
+        except Exception as e2:
+            _file_handler = None
+            _file_setup_failed = True
+            logger.warning(
+                "VCM logging: could not open log file %s: %s / %s — "
+                "falling back to console only.", log_path, e, e2)
+            return False
+
+
+def _detach_file_handler():
+    global _file_handler
+    if _file_handler is None:
+        return
+    _safe_close(_file_handler)
+    _file_handler = None
+
+
 def setup_logging(debug_enabled=False):
     """Idempotent setup of VCM logging.
 
-    Always attaches a console handler. Tries to attach a file handler at
-    <addon_dir>/logs/vcm_debug.log. Falls back to console-only if file logging
-    is unavailable (and emits a single WARNING describing why).
+    Always attaches a console handler at WARNING+ so user-visible failures
+    still print to Blender's system console. The file handler at
+    <addon_dir>/logs/vcm_debug.log is opt-in and only attached when
+    `debug_enabled` is True (or when the user later flips Debug Mode on).
 
     Returns True if file logging is active, False otherwise.
     """
-    global _console_handler, _file_handler, _debug_enabled, _file_setup_failed
+    global _console_handler, _debug_enabled, _file_setup_failed
 
     teardown_logging()
     _debug_enabled = bool(debug_enabled)
@@ -132,34 +192,8 @@ def setup_logging(debug_enabled=False):
     _console_handler.setFormatter(_FORMATTER)
     logger.addHandler(_console_handler)
 
-    logs_dir = _ensure_logs_dir()
-    if logs_dir is not None:
-        log_path = get_log_path()
-        try:
-            _file_handler = logging.handlers.RotatingFileHandler(
-                log_path, mode='a', encoding='utf-8',
-                maxBytes=_LOG_MAX_BYTES,
-                backupCount=_LOG_BACKUP_COUNT,
-                delay=True)
-            _file_handler.setFormatter(_FORMATTER)
-            logger.addHandler(_file_handler)
-        except Exception as e:
-            # Fall back to a plain FileHandler so we still get a log file
-            # even if rotation isn't usable for any reason.
-            try:
-                _file_handler = logging.FileHandler(
-                    log_path, mode='a', encoding='utf-8', delay=True)
-                _file_handler.setFormatter(_FORMATTER)
-                logger.addHandler(_file_handler)
-                logger.warning(
-                    "VCM logging: rotation init failed (%s) — using plain "
-                    "FileHandler.", e)
-            except Exception as e2:
-                _file_handler = None
-                _file_setup_failed = True
-                logger.warning(
-                    "VCM logging: could not open log file %s: %s / %s — "
-                    "falling back to console only.", log_path, e, e2)
+    if _debug_enabled:
+        _attach_file_handler()
 
     _apply_level()
     return _file_handler is not None
@@ -180,27 +214,37 @@ def is_debug_enabled():
 
 
 def set_debug_enabled(enabled):
-    """Toggle verbose Debug Mode without re-creating handlers."""
+    """Toggle verbose Debug Mode at runtime.
+
+    Attaches the file handler when Debug Mode turns ON, detaches it when
+    Debug Mode turns OFF (so a quiet install does not accumulate logs).
+    """
     global _debug_enabled
     was = _debug_enabled
     _debug_enabled = bool(enabled)
+
+    if _debug_enabled and _file_handler is None:
+        _attach_file_handler()
+
     _apply_level()
+
     if was != _debug_enabled:
-        # Always emit a transition record at WARNING so it appears in the file
-        # regardless of the new level.
         if _debug_enabled:
-            logger.warning("VCM logging: Debug Mode ENABLED.")
+            logger.warning("VCM logging: Debug Mode ENABLED — file logging active.")
         else:
-            logger.warning("VCM logging: Debug Mode DISABLED.")
+            logger.warning("VCM logging: Debug Mode DISABLED — file logging stopped.")
+            _detach_file_handler()
 
 
 def truncate_log_file():
-    """Empty vcm_debug.log safely. Future logging continues to the same file.
+    """Empty vcm_debug.log safely.
 
-    Closes file handlers first (Windows holds an exclusive lock), truncates,
-    then re-attaches handlers preserving the current Debug Mode.
+    Closes file handlers first (Windows holds an exclusive lock), truncates
+    the file (creating it if absent), then re-establishes logging preserving
+    the current Debug Mode. With Debug Mode OFF the file is created empty
+    and no handler is re-attached — future logs only resume once the user
+    enables Debug Mode.
     """
-    global _file_handler
     debug = _debug_enabled
     path = get_log_path()
     teardown_logging()

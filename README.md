@@ -19,7 +19,8 @@ colors — packing AO-like masks, wear, dirt, blend weights, IDs.
   generated inside isolate mode
 - Limited **POINT**-domain support for simple ops (Fill, Quick Fill,
   Invert, Remap, Posterize)
-- **Diagnostics summary** + rotating log files
+- **Diagnostics summary** + opt-in rotating log files (off by default;
+  enable Debug Mode in addon preferences to write `vcm_debug.log`)
 - **GitHub Releases updater** built in (manual check, no auto-poll, no
   tokens)
 
@@ -100,9 +101,13 @@ In the VCM panel header / Help row:
 - **Copy Diagnostics Summary** — copies a redacted system / addon snapshot
   to clipboard.
 - **Open Logs Folder** — jumps to `logs/` inside the addon.
-- **Clear Log** — truncates `vcm_debug.log`.
+- **Clear Log** — truncates `vcm_debug.log` (creates it if it doesn't
+  exist yet).
 
-For bug reports, paste the diagnostics summary and attach `vcm_debug.log`.
+File logging is **OFF by default** in v0.11.1+. To capture
+`vcm_debug.log` for a bug report, enable **Debug Mode** in the addon
+preferences, reproduce the issue, then attach the log alongside the
+diagnostics summary.
 
 ## Limitations
 
