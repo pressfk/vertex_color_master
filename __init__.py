@@ -47,7 +47,7 @@ bl_info = {
         "Original: Andrew Palmer (with Bartosz Styperek). "
         "Modernized custom build: pressfk."
     ),
-    "version": (0, 11, 0),
+    "version": (0, 11, 2),
     "blender": (3, 6, 0),
     "location": "Vertex Paint | View3D > VCM",
     "description": (
@@ -227,13 +227,29 @@ class VCMAddonPreferences(bpy.types.AddonPreferences):
     bl_idname = _ADDON_KEY
 
     debug_mode: BoolProperty(
-        name="Debug Mode",
+        name="Debug Mode (enable file logging)",
         description=(
-            "Enable verbose DEBUG logging to the system console and to "
-            "<addon>/logs/vcm_debug.log. WARNING/ERROR/EXCEPTION are still "
-            "written when this is off."),
+            "Enable verbose DEBUG logging to <addon>/logs/vcm_debug.log. "
+            "Disabled by default — when off, no log file is written or "
+            "appended to. WARNING/ERROR/EXCEPTION still print to Blender's "
+            "system console and are surfaced via report() / HUD."),
         default=False,
         update=lambda self, ctx: vcm_log.set_debug_enabled(self.debug_mode),
+    )
+
+    update_channel: EnumProperty(
+        name="Update Channel",
+        description=(
+            "Stable serves normal GitHub Releases. Unstable serves GitHub "
+            "pre-releases (beta builds — may contain bugs). You can return "
+            "to the latest stable from the Recovery section at any time."),
+        items=[
+            ('STABLE', "Stable", "Track normal GitHub Releases"),
+            ('UNSTABLE', "Unstable", "Track GitHub pre-release (beta) builds"),
+        ],
+        default='STABLE',
+        update=lambda self, ctx: vcm_updater.set_active_channel(
+            self.update_channel),
     )
 
     show_hud_notifications: BoolProperty(
@@ -269,7 +285,7 @@ class VCMAddonPreferences(bpy.types.AddonPreferences):
         # Self-updater (manual-check only). Drawn at top so it's the first
         # thing the user sees in the prefs panel.
         try:
-            vcm_updater.draw_updater_ui(layout)
+            vcm_updater.draw_updater_ui(layout, prefs=self)
         except Exception as e:
             vcm_log.logger.warning("VCM updater UI draw failed: %s", e)
 
@@ -297,9 +313,14 @@ class VCMAddonPreferences(bpy.types.AddonPreferences):
         col = box.column(align=True)
         col.label(text="Diagnostic Log")
         col.label(text=vcm_log.get_log_path(), icon='TEXT')
-        col.label(
-            text="Auto-rotates at ~2 MB, 3 backups kept.",
-            icon='INFO')
+        if self.debug_mode:
+            col.label(
+                text="Active. Auto-rotates at ~2 MB, 3 backups kept.",
+                icon='INFO')
+        else:
+            col.label(
+                text="File logging OFF. Enable Debug Mode to write logs.",
+                icon='INFO')
         row = box.row(align=True)
         row.operator('vertexcolormaster.open_logs_folder', icon='FILE_FOLDER')
         row.operator('vertexcolormaster.clear_log_file', icon='TRASH')
