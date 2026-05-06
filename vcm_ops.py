@@ -25,6 +25,7 @@ import subprocess
 from bpy.props import *
 from .vcm_globals import *
 from .vcm_helpers import *
+from . import vcm_activity
 from . import vcm_log
 from . import vcm_hud
 from .vcm_log import logger, log_vcol_info, log_context, log_exception
@@ -1692,6 +1693,11 @@ class VERTEXCOLORMASTER_OT_IsolateChannel(bpy.types.Operator):
                 "{0} {1}".format(verb, self.src_channel_id),
                 'SUCCESS', channel=self.src_channel_id)
 
+        vcm_activity.record(
+            'isolate.enter', 'INFO',
+            "Isolated {0}".format(self.src_channel_id),
+            {'channel': self.src_channel_id, 'src': vcol.name,
+             'auto_switch': action == 'AUTO'})
         return {'FINISHED'}
 
 
@@ -2052,6 +2058,12 @@ class VERTEXCOLORMASTER_OT_ApplyIsolatedChannel(bpy.types.Operator):
                      else "Applied Mask: {0}".format(mask))
             vcm_hud.show_hud(context, label, 'SUCCESS', mask=mask)
 
+        vcm_activity.record(
+            'isolate.discard' if self.discard else 'isolate.apply',
+            'INFO',
+            "Discarded {0}".format(mask) if self.discard
+            else "Applied {0}".format(mask),
+            {'mask': mask, 'original': original_name})
         return {'FINISHED'}
 
 
@@ -2187,6 +2199,11 @@ class VERTEXCOLORMASTER_OT_BlurSelectedChannels(bpy.types.Operator):
             context,
             "Blurred Mask: {0}".format(mask),
             'SUCCESS', mask=mask)
+        vcm_activity.record(
+            'blur.selected', 'INFO',
+            "Blurred {0}".format(mask),
+            {'mask': mask, 'iter': iterations,
+             'strength': strength, 'mode': mode})
         return {'FINISHED'}
 
 
@@ -2892,6 +2909,11 @@ class VERTEXCOLORMASTER_OT_GenerateGeometryMask(bpy.types.Operator):
             vcm_hud.show_hud(context, msg, 'SUCCESS', channel=iso_mask)
         else:
             vcm_hud.show_hud(context, msg, 'SUCCESS', mask=iso_mask)
+        vcm_activity.record(
+            'geometry_mask.generate', 'INFO',
+            msg,
+            {'effect': self.effect, 'iso_mask': iso_mask,
+             'strength': params['strength'], 'width': params['width']})
         return {'FINISHED'}
 
 
@@ -2943,14 +2965,45 @@ _POINT_UNSUPPORTED = (
 )
 
 
+def _format_log_tail_filtered(path, n_lines=20, level_marks=("[WARNING]", "[ERROR]", "[EXCEPTION]")):
+    """Return up to n_lines of WARNING/ERROR/EXCEPTION lines from the log."""
+    try:
+        with open(path, 'r', encoding='utf-8', errors='replace') as f:
+            lines = [
+                ln.rstrip('\n') for ln in f
+                if any(m in ln for m in level_marks)
+            ]
+        tail = lines[-n_lines:] if len(lines) > n_lines else lines
+        return "\n".join(tail) if tail else "  (no warnings/errors)"
+    except Exception as e:
+        return "  (could not read log: {0})".format(e)
+
+
+def _detect_install_kind(addon_dir):
+    """Best-effort classification of where the addon is installed."""
+    p = addon_dir.replace('\\', '/').lower()
+    if '/extensions/' in p:
+        return ('EXTENSION_REPO',
+                'WARNING: addon is under extensions/ — VCM is a legacy '
+                'scripts/addons addon, NOT a Blender Extension. Reinstall '
+                'into scripts/addons/.')
+    if '/scripts/addons/' in p:
+        return ('SCRIPTS_ADDONS', '')
+    return ('UNKNOWN', '')
+
+
 def build_diagnostics_summary(context):
-    """Generate the user-facing plain-text diagnostics report.
+    """Generate the user-facing plain-text Technical Report.
 
     Strict no-mutation: only reads context, prefs, mesh names + lengths,
-    and tail of the log file.
+    updater state, brush sync state, and short tails of log/activity files.
+    Never includes per-vertex/loop colors, mesh data, tokens, or URLs that
+    require auth.
     """
     import datetime
+    import platform
     from . import bl_info, _ADDON_KEY, get_addon_preferences
+    from . import vcm_updater
 
     prefs = get_addon_preferences()
 
@@ -2959,21 +3012,65 @@ def build_diagnostics_summary(context):
     addon_version = '.'.join(str(x) for x in bl_info.get('version', ()))
     blender_version = bpy.app.version_string
 
+    install_kind, install_warning = _detect_install_kind(addon_dir)
+
     lines = []
-    lines.append("VCM Diagnostics Summary")
-    lines.append("=======================")
+    lines.append("VCM Technical Report")
+    lines.append("====================")
     lines.append("Generated:    {0}".format(
         datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     lines.append("Addon:        Vertex Color Master {0}".format(addon_version))
     lines.append("Addon key:    {0}".format(_ADDON_KEY))
     lines.append("Addon path:   {0}".format(addon_dir))
+    lines.append("Install kind: {0}".format(install_kind))
+    if install_warning:
+        lines.append("  ! {0}".format(install_warning))
     lines.append("Blender:      {0}".format(blender_version))
+    try:
+        lines.append("OS:           {0} {1}".format(
+            platform.system(), platform.release()))
+    except Exception:
+        pass
+    try:
+        lines.append("Python:       {0}".format(
+            platform.python_version()))
+    except Exception:
+        pass
     lines.append("")
+
+    # --- Updater state ------------------------------------------------------
+    try:
+        upd = vcm_updater.get_state_summary()
+    except Exception as e:
+        upd = {'error': str(e)}
+    lines.append("Updater")
+    lines.append("-------")
+    lines.append("Channel:           {0}".format(
+        upd.get('active_channel')))
+    lines.append("Updater available: {0}".format(
+        upd.get('available')))
+    lines.append("Last check:        channel={0} ts={1} fresh={2}".format(
+        upd.get('last_check_channel'),
+        upd.get('last_check_ts'),
+        upd.get('last_check_fresh')))
+    lines.append("Last tag:          {0} (prerelease={1})".format(
+        upd.get('last_tag'), upd.get('last_prerelease')))
+    lines.append("Last asset:        {0}".format(
+        upd.get('last_asset_name')))
+    if upd.get('last_error'):
+        lines.append("Last error:        {0}".format(upd['last_error']))
+    lines.append("Update ready:      {0}".format(upd.get('update_ready')))
+    lines.append("Download knobs:    timeout={0}s attempts={1}".format(
+        upd.get('download_timeout_s'), upd.get('download_max_attempts')))
+    lines.append("")
+
+    # --- Active context ----------------------------------------------------
+    lines.append("Active context")
+    lines.append("--------------")
     lines.append("Active object:    {0} ({1})".format(
         s.get('object'), s.get('object_type')))
     lines.append("Object mode:      {0}".format(s.get('mode')))
     lines.append("Selected count:   {0}".format(s.get('selected_count')))
-    lines.append("")
 
     attr = s.get('attr')
     if attr is None:
@@ -2984,7 +3081,6 @@ def build_diagnostics_summary(context):
         lines.append("  data_type:     {0}".format(attr['data_type']))
         lines.append("  data length:   {0}".format(attr['data_len']))
         lines.append("  active index:  {0}".format(attr['active_index']))
-    lines.append("")
     lines.append("VCM mode:        {0}".format(s.get('vcm_mode')))
     lines.append("Channel mask:    {0}".format(s.get('mask') or '<none>'))
     lines.append("Isolate state:   {0}".format(s.get('iso_state')))
@@ -3000,58 +3096,115 @@ def build_diagnostics_summary(context):
             t['name'], t['mask'], t['original']))
     lines.append("")
 
+    # --- Brush sync ---------------------------------------------------------
+    lines.append("Brush sync")
+    lines.append("----------")
+    try:
+        lines.append(_build_brush_sync_diagnostics(context))
+    except Exception as e:
+        lines.append("  (brush sync read failed: {0})".format(e))
+    lines.append("")
+
+    # --- Diagnostics --------------------------------------------------------
     debug_on = bool(getattr(prefs, 'debug_mode', False)) if prefs else False
     hud_on = bool(getattr(prefs, 'show_hud_notifications', True)) if prefs else True
+    log_path = vcm_log.get_log_path()
+    log_exists = os.path.isfile(log_path)
+    lines.append("Diagnostics")
+    lines.append("-----------")
     lines.append("Debug Mode:      {0}".format(debug_on))
+    lines.append("File logging:    {0}".format(
+        "ON (file handler attached)" if vcm_log.is_debug_enabled()
+        else "OFF"))
     lines.append("Show HUD:        {0}".format(hud_on))
-    lines.append("Log file:        {0}".format(vcm_log.get_log_path()))
+    lines.append("Log file:        {0}".format(log_path))
+    lines.append("Log file exists: {0}".format(log_exists))
+    lines.append("Activity dir:    {0}".format(
+        vcm_activity.get_activity_dir()))
     lines.append("")
 
-    lines.append("Hotkeys (Vertex Paint):")
+    # --- User note ----------------------------------------------------------
+    note = ''
+    if prefs is not None:
+        note = (getattr(prefs, 'bug_report_note', '') or '').strip()
+    if note:
+        lines.append("Bug report note")
+        lines.append("---------------")
+        # Cap user note at 1 KB so the report stays compact.
+        if len(note) > 1024:
+            note = note[:1024] + '\n[... truncated ...]'
+        lines.append(note)
+        lines.append("")
+
+    # --- Hotkeys ------------------------------------------------------------
+    lines.append("Hotkeys (Vertex Paint)")
+    lines.append("----------------------")
     lines.append(_format_hotkeys_block(prefs))
     lines.append("")
-
     lines.append("POINT-domain support:")
     lines.append("  Supported (POINT + CORNER): {0}".format(_POINT_SUPPORTED))
     lines.append("  Still CORNER-only: {0}".format(_POINT_UNSUPPORTED))
     lines.append("")
 
-    log_path = vcm_log.get_log_path()
-    if os.path.isfile(log_path):
-        lines.append("Last log lines:")
-        lines.append(_format_log_tail(log_path, n_lines=20))
+    # --- Recent activity (capped, even when Debug Mode OFF) -----------------
+    lines.append("Recent activity (last events, oldest → newest)")
+    lines.append("---------------------------------------------")
+    try:
+        lines.append(vcm_activity.format_recent_block(max_events=80))
+    except Exception as e:
+        lines.append("  (activity read failed: {0})".format(e))
+    lines.append("")
+
+    # --- Log tail (filtered) -----------------------------------------------
+    if log_exists:
+        lines.append("Last warnings/errors from vcm_debug.log")
+        lines.append("--------------------------------------")
+        lines.append(_format_log_tail_filtered(log_path, n_lines=20))
     else:
-        lines.append("Last log lines: <log file not yet created>")
+        lines.append("Last warnings/errors: <log file not yet created>")
 
     return "\n".join(lines)
 
 
+# Backwards-compatible alias for any external callers.
+build_technical_report = build_diagnostics_summary
+
+
 class VERTEXCOLORMASTER_OT_CopyDiagnosticsSummary(bpy.types.Operator):
-    """Copy a compact VCM diagnostics summary to the system clipboard"""
+    """Copy a compact VCM technical report to the system clipboard"""
     bl_idname = 'vertexcolormaster.copy_diagnostics_summary'
-    bl_label = "Copy VCM Diagnostics Summary"
+    bl_label = "Copy Technical Report"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
         try:
             text = build_diagnostics_summary(context)
         except Exception as e:
-            log_exception("CopyDiagnosticsSummary build", e, context)
+            log_exception("CopyTechnicalReport build", e, context)
+            vcm_activity.record(
+                'report.copy.failure', 'ERROR',
+                'Build failed', {'err': str(e)[:200]})
             self.report({'ERROR'},
-                "Could not build diagnostics summary: {0}".format(e))
+                "Could not build technical report: {0}".format(e))
             return {'CANCELLED'}
         try:
             context.window_manager.clipboard = text
         except Exception as e:
-            log_exception("CopyDiagnosticsSummary clipboard", e, context)
+            log_exception("CopyTechnicalReport clipboard", e, context)
+            vcm_activity.record(
+                'report.copy.failure', 'ERROR',
+                'Clipboard failed', {'err': str(e)[:200]})
             self.report({'ERROR'},
                 "Could not copy to clipboard: {0}".format(e))
             return {'CANCELLED'}
         logger.info(
-            "VCM CopyDiagnosticsSummary: success bytes=%d", len(text))
-        vcm_hud.show_hud(context, "Diagnostics summary copied", 'SUCCESS')
+            "VCM CopyTechnicalReport: success bytes=%d", len(text))
+        vcm_activity.record(
+            'report.copy.success', 'INFO',
+            'Technical report copied', {'bytes': len(text)})
+        vcm_hud.show_hud(context, "Technical report copied", 'SUCCESS')
         self.report({'INFO'},
-            "VCM diagnostics summary copied to clipboard.")
+            "VCM technical report copied to clipboard.")
         return {'FINISHED'}
 
 
@@ -3078,6 +3231,9 @@ class VERTEXCOLORMASTER_OT_CopyBrushSyncDiagnostics(bpy.types.Operator):
             return {'CANCELLED'}
         logger.info(
             "VCM CopyBrushSyncDiagnostics: success bytes=%d", len(text))
+        vcm_activity.record(
+            'report.brush_sync.copy', 'INFO',
+            'Brush sync diagnostics copied', {'bytes': len(text)})
         vcm_hud.show_hud(
             context, "Brush sync diagnostics copied", 'SUCCESS')
         self.report({'INFO'},
@@ -3164,9 +3320,9 @@ def _build_brush_sync_diagnostics(context):
 
 
 class VERTEXCOLORMASTER_OT_SaveDiagnosticsSummary(bpy.types.Operator):
-    """Save the VCM diagnostics summary as a timestamped .txt next to the log"""
+    """Save the VCM technical report as a timestamped .txt next to the log"""
     bl_idname = 'vertexcolormaster.save_diagnostics_summary'
-    bl_label = "Save VCM Diagnostics Summary"
+    bl_label = "Save Technical Report"
     bl_options = {'REGISTER'}
 
     def execute(self, context):
@@ -3174,29 +3330,38 @@ class VERTEXCOLORMASTER_OT_SaveDiagnosticsSummary(bpy.types.Operator):
         try:
             text = build_diagnostics_summary(context)
         except Exception as e:
-            log_exception("SaveDiagnosticsSummary build", e, context)
+            log_exception("SaveTechnicalReport build", e, context)
+            vcm_activity.record(
+                'report.save.failure', 'ERROR',
+                'Build failed', {'err': str(e)[:200]})
             self.report({'ERROR'},
-                "Could not build diagnostics summary: {0}".format(e))
+                "Could not build technical report: {0}".format(e))
             return {'CANCELLED'}
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         path = os.path.join(
             vcm_log.get_logs_dir(),
-            "vcm_diagnostics_{0}.txt".format(ts))
+            "vcm_report_{0}.txt".format(ts))
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, 'w', encoding='utf-8') as f:
                 f.write(text)
         except Exception as e:
-            log_exception("SaveDiagnosticsSummary write", e, context)
+            log_exception("SaveTechnicalReport write", e, context)
+            vcm_activity.record(
+                'report.save.failure', 'ERROR',
+                'Write failed', {'err': str(e)[:200]})
             self.report({'ERROR'},
-                "Could not save diagnostics: {0}".format(e))
+                "Could not save report: {0}".format(e))
             return {'CANCELLED'}
         logger.info(
-            "VCM SaveDiagnosticsSummary: saved %s bytes=%d", path, len(text))
+            "VCM SaveTechnicalReport: saved %s bytes=%d", path, len(text))
+        vcm_activity.record(
+            'report.save.success', 'INFO',
+            'Technical report saved', {'path': path, 'bytes': len(text)})
         vcm_hud.show_hud(
-            context, "Diagnostics saved to logs folder", 'SUCCESS')
+            context, "Technical report saved", 'SUCCESS')
         self.report({'INFO'},
-            "Diagnostics saved: {0}".format(path))
+            "Technical report saved: {0}".format(path))
         return {'FINISHED'}
 
 

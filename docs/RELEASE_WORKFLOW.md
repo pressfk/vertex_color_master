@@ -49,6 +49,11 @@ should ship `vertex_color_master.zip`.
    - In a clean Blender, addon prefs → Updates → Channel: Stable →
      **Check Stable** → **Install Stable Update** → restart →
      `bl_info["version"]` reflects the new value.
+   - Confirm the install button is **disabled until Check Stable
+     succeeds in this Blender session**. v0.11.4+ enforces a
+     per-channel fresh-check session gate to prevent stale
+     `updater_status.json` cache from triggering an Install with a
+     dead URL after a Blender restart.
 
 ## 2. Unstable / beta release
 
@@ -62,7 +67,29 @@ Same flow as Stable with three changes:
 
 Asset name stays `vertex_color_master.zip`. Beta tags are not used as
 "installed version" for Stable comparisons; **Return to Latest Stable**
-in the addon prefs always force-installs the newest non-prerelease.
+in the addon prefs always force-installs the newest non-prerelease
+(v0.11.4+ also re-filters the tag list to drop any prereleases that
+slipped past the channel filter, and surfaces a clear error if no
+stable release is reachable).
+
+## Updater download reliability (v0.11.4+)
+
+`vcm_updater.py` monkey-patches `Updater.stage_repository` with:
+
+- a 30-second connect/read timeout,
+- 3 retry attempts with a short sleep between each,
+- classified network errors (`SSL_EOF`, `TIMEOUT`, `HTTP_<code>`,
+  `URL_<reason>`, `CONNECTION_ERROR`),
+- 0-byte download detection (treated as a soft failure and retried),
+- mirrored events into the session activity buffer
+  (`updater.download.attempt_failed`, `updater.download.failure`,
+  `updater.download.success`).
+
+If a release fails to install end-to-end, ask the reporter to use
+**Addon Preferences → Diagnostics / Support → Copy Technical Report**
+or **Save Technical Report** — the report includes the updater state
+and the recent activity trail so the failure mode is reproducible
+without spelunking through `vcm_debug.log`.
 
 ### Beta version display
 

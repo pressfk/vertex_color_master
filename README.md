@@ -19,10 +19,17 @@ colors — packing AO-like masks, wear, dirt, blend weights, IDs.
   generated inside isolate mode
 - Limited **POINT**-domain support for simple ops (Fill, Quick Fill,
   Invert, Remap, Posterize)
-- **Diagnostics summary** + opt-in rotating log files (off by default;
-  enable Debug Mode in addon preferences to write `vcm_debug.log`)
-- **GitHub Releases updater** built in (manual check, no auto-poll, no
-  tokens)
+- **Technical Report** (Copy / Save) for bug submissions: addon +
+  install-kind, Blender / OS / Python, updater state, active context,
+  brush sync, recent capped activity trail, filtered log tail
+- **Session activity buffer** — small JSONL ring in `logs/`, on by
+  default, capped at ~400 events / 200 KB per session, surfaces in
+  the Technical Report even when Debug Mode is OFF
+- Opt-in rotating debug log file (off by default; enable Debug Mode
+  in addon preferences to write `vcm_debug.log`)
+- **GitHub Releases updater** with **Stable / Unstable** channels,
+  per-channel fresh-check session gate, retry/timeout download
+  wrapper (manual check, no auto-poll, no tokens)
 
 ## Installation
 
@@ -41,13 +48,23 @@ build is not packaged for the new Extension Repository.
 Intended flow:
 
 1. **Edit → Preferences → Add-ons → Vertex Color Master → Updates**
-2. Click **Check for Updates**
-3. Click **Install Update**
-4. Restart Blender
+2. Pick the **Stable** or **Unstable** channel.
+3. Click **Check Stable** / **Check Unstable**.
+4. Click **Install Stable Update** / **Install Latest Unstable**.
+5. Restart Blender.
 
-Update flow is wired up against GitHub Releases. The first public release
-may still require a manual ZIP install until the first end-to-end update
-cycle is verified in-Blender.
+The Install button stays disabled until the matching Check has
+succeeded *in the current Blender session* — a Blender restart
+invalidates the previous session's "ready to install" state to
+prevent stale download URLs from a cached `updater_status.json`.
+
+If a download fails (SSL / EOF / timeout / HTTP), VCM retries up to
+3 times with a classified error string (e.g. `SSL_EOF`,
+`URL_gaierror`). Use **Open Releases Page** as a fallback to install
+the ZIP manually.
+
+Beta testers can roll back to the latest stable at any time via
+**Recovery → Return to Latest Stable** in addon preferences.
 
 ## Basic workflow
 

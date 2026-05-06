@@ -1,0 +1,95 @@
+VCM Technical Report
+====================
+Generated:    2026-05-06 22:11:58
+Addon:        Vertex Color Master 0.11.4
+Addon key:    vertex_color_master
+Addon path:   C:\Users\PressF\AppData\Roaming\Blender Foundation\Blender\4.5\scripts\addons\vertex_color_master
+Install kind: SCRIPTS_ADDONS
+Blender:      4.5.9 LTS
+OS:           Windows 10
+Python:       3.11.11
+
+Updater
+-------
+Channel:           STABLE
+Updater available: True
+Last check:        channel=None ts=None fresh=False
+Last tag:          None (prerelease=None)
+Last asset:        None
+Update ready:      False
+Download knobs:    timeout=30s attempts=3
+
+Active context
+--------------
+Active object:    None (None)
+Object mode:      None
+Selected count:   1
+Active color attribute: <none>
+VCM mode:        Unknown
+Channel mask:    RGB
+Isolate state:   NONE
+VCM temp attrs:  0
+
+Brush sync
+----------
+Blender:       4.5.9 LTS
+Active object: <none>
+Active mode:   <none>
+Active brush:  Paint Hard
+  brush.color:           (0.9000, 0.1000, 0.2000)
+  brush.secondary_color: (0.2500, 0.5000, 0.7500)
+  ups.use_unified_color: False
+  ups.color:             (0.0000, 0.0000, 0.0000)
+  ups.secondary_color:   (0.0000, 0.0000, 0.0000)
+  VCM brush_color:                   (1.0000, 0.0000, 0.0000)
+  VCM brush_secondary_color:         (1.0000, 0.0000, 0.0000)
+  VCM brush_value_isolate:           1.0000
+  VCM brush_secondary_value_isolate: 0.0000
+  VCM use_grayscale:                 False
+  VCM active_channels:               ['B', 'G', 'R']
+  Isolate:                           <none>
+
+Diagnostics
+-----------
+Debug Mode:      False
+File logging:    OFF
+Show HUD:        True
+Log file:        C:\Users\PressF\AppData\Roaming\Blender Foundation\Blender\4.5\scripts\addons\vertex_color_master\logs\vcm_debug.log
+Log file exists: True
+Activity dir:    C:\Users\PressF\AppData\Roaming\Blender Foundation\Blender\4.5\scripts\addons\vertex_color_master\logs
+
+Hotkeys (Vertex Paint)
+----------------------
+  Pie Menu                         V
+  Flip Brush Colors                X
+  Isolate R                        Alt + 1
+  Isolate G                        Alt + 2
+  Isolate B                        Alt + 3
+  Isolate A                        Alt + 4
+  Select / Restore RGBA            Alt + 5
+  Apply Isolated                   Alt + E
+  Discard Isolated                 Alt + Q
+  Cleanup VCM Temp Attributes      Alt + C  (disabled)
+  Roll Isolate Next                Alt + W
+  Roll Isolate Previous            Alt + S
+
+POINT-domain support:
+  Supported (POINT + CORNER): Fill, Quick Fill, Invert, Remap, Posterize
+  Still CORNER-only: Blur Selected Channels, Gradient, Randomize Mesh Island Colors, Randomize Per Channel, UVs/Normals/Weights ↔ Color, RGB to Grayscale, Copy / Blend Channels
+
+Recent activity (last events, oldest → newest)
+---------------------------------------------
+  2026-05-06 22:11:30 [INFO] session.start — VCM activity buffer started
+  2026-05-06 22:11:30 [INFO] addon.enabled — Vertex Color Master enabled  {"version": "0.11.4"}
+  2026-05-06 22:11:30 [INFO] updater.registered — Updater module registered  {"channel": "STABLE", "current": "0.11.4"}
+  2026-05-06 22:11:44 [WARNING] updater.install.refused — Install refused — no fresh check this session  {"channel": "STABLE"}
+  2026-05-06 22:11:58 [INFO] report.copy.success — Technical report copied  {"bytes": 3885}
+
+Last warnings/errors from vcm_debug.log
+--------------------------------------
+2026-05-05 00:26:42 [WARNING] VCM logging: Debug Mode ENABLED — file logging active.
+2026-05-05 00:26:42 [WARNING] VCM smoke: debug ON probe.
+2026-05-05 00:26:42 [WARNING] VCM logging: Debug Mode DISABLED — file logging stopped.
+2026-05-05 22:03:14 [WARNING] VCM logging: Debug Mode ENABLED — file logging active.
+2026-05-05 22:03:14 [WARNING] VCM addon registered (debug=True, log=C:\Users\PressF\AppData\Roaming\Blender Foundation\Blender\4.5\scripts\addons\vertex_color_master\logs\vcm_debug.log)
+2026-05-05 22:12:10 [WARNING] VCM addon unregistering.

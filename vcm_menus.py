@@ -143,7 +143,7 @@ def draw_help_box(layout, show_cleanup=True):
                  text="Clear Log", icon='TRASH')
     row = col.row(align=True)
     row.operator('vertexcolormaster.copy_diagnostics_summary',
-                 text="Copy Diagnostics", icon='COPYDOWN')
+                 text="Copy Technical Report", icon='COPYDOWN')
     if show_cleanup:
         row = col.row(align=True)
         row.operator('vertexcolormaster.cleanup_orphan_isolates',

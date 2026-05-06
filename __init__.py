@@ -22,6 +22,7 @@ if "bpy" in locals():
     import importlib
     importlib.reload(vcm_globals)
     importlib.reload(vcm_log)
+    importlib.reload(vcm_activity)
     importlib.reload(vcm_hud)
     importlib.reload(vcm_helpers)
     importlib.reload(vcm_main)
@@ -37,6 +38,7 @@ from . import vcm_ops
 from . import vcm_globals
 from . import vcm_helpers
 from . import vcm_log
+from . import vcm_activity
 from . import vcm_hud
 from . import vcm_updater
 from .vcm_globals import KEY_ENUM_ITEMS, key_display
@@ -47,7 +49,7 @@ bl_info = {
         "Original: Andrew Palmer (with Bartosz Styperek). "
         "Modernized custom build: pressfk."
     ),
-    "version": (0, 11, 3),
+    "version": (0, 11, 4),
     "blender": (3, 6, 0),
     "location": "Vertex Paint | View3D > VCM",
     "description": (
@@ -226,6 +228,14 @@ def _make_hotkey_props():
 class VCMAddonPreferences(bpy.types.AddonPreferences):
     bl_idname = _ADDON_KEY
 
+    def _on_debug_mode_changed(self, ctx):
+        vcm_log.set_debug_enabled(self.debug_mode)
+        vcm_activity.record(
+            'debug_mode.toggled',
+            'INFO',
+            'Debug Mode {0}'.format('ON' if self.debug_mode else 'OFF'),
+            {'enabled': bool(self.debug_mode)})
+
     debug_mode: BoolProperty(
         name="Debug Mode (enable file logging)",
         description=(
@@ -234,7 +244,17 @@ class VCMAddonPreferences(bpy.types.AddonPreferences):
             "appended to. WARNING/ERROR/EXCEPTION still print to Blender's "
             "system console and are surfaced via report() / HUD."),
         default=False,
-        update=lambda self, ctx: vcm_log.set_debug_enabled(self.debug_mode),
+        update=_on_debug_mode_changed,
+    )
+
+    bug_report_note: StringProperty(
+        name="Bug report note",
+        description=(
+            "Optional short note included at the top of the Technical "
+            "Report (Copy / Save). Describe what you were doing when the "
+            "issue happened. Capped at ~1 KB in the report output."),
+        default="",
+        maxlen=1024,
     )
 
     update_channel: EnumProperty(
@@ -311,24 +331,36 @@ class VCMAddonPreferences(bpy.types.AddonPreferences):
 
         box = layout.box()
         col = box.column(align=True)
-        col.label(text="Diagnostic Log")
-        col.label(text=vcm_log.get_log_path(), icon='TEXT')
+        col.label(text="Diagnostics / Support", icon='INFO')
+        col.label(text="Log: {0}".format(vcm_log.get_log_path()),
+                  icon='TEXT')
         if self.debug_mode:
             col.label(
-                text="Active. Auto-rotates at ~2 MB, 3 backups kept.",
+                text="File logging ON. Auto-rotates at ~2 MB, 3 backups.",
                 icon='INFO')
         else:
             col.label(
                 text="File logging OFF. Enable Debug Mode to write logs.",
                 icon='INFO')
-        row = box.row(align=True)
-        row.operator('vertexcolormaster.open_logs_folder', icon='FILE_FOLDER')
-        row.operator('vertexcolormaster.clear_log_file', icon='TRASH')
+        col.label(
+            text="Activity buffer: {0}".format(
+                vcm_activity.get_activity_dir()),
+            icon='SORTTIME')
+
+        col.separator()
+        col.prop(self, "bug_report_note")
+
         row = box.row(align=True)
         row.operator('vertexcolormaster.copy_diagnostics_summary',
-                     text="Copy Diagnostics Summary", icon='COPYDOWN')
+                     text="Copy Technical Report", icon='COPYDOWN')
         row.operator('vertexcolormaster.save_diagnostics_summary',
-                     text="Save Diagnostics Summary", icon='FILE_TICK')
+                     text="Save Technical Report", icon='FILE_TICK')
+
+        row = box.row(align=True)
+        row.operator('vertexcolormaster.open_logs_folder',
+                     text="Open Reports/Logs Folder", icon='FILE_FOLDER')
+        row.operator('vertexcolormaster.clear_log_file',
+                     text="Clear Log File", icon='TRASH')
 
         box = layout.box()
         header = box.row(align=True)
@@ -521,6 +553,17 @@ def register():
     # captured. We refine the level once preferences become accessible.
     vcm_log.setup_logging(debug_enabled=False)
 
+    # Rotate the small session-activity buffer (current → previous, fresh
+    # current). Independent from Debug Mode; capped + tiny.
+    try:
+        vcm_activity.rotate_for_new_session()
+        vcm_activity.record(
+            'addon.enabled', 'INFO',
+            'Vertex Color Master enabled',
+            {'version': '.'.join(str(x) for x in bl_info.get('version', ()))})
+    except Exception as e:
+        vcm_log.logger.warning("VCM activity rotate failed: %s", e)
+
     # add operators (this is what materialises VCMAddonPreferences as a live
     # instance accessible via bpy.context.preferences.addons[...]preferences)
     for c in classes:
@@ -572,6 +615,12 @@ def _unregister_keymaps():
 
 def unregister():
     vcm_log.logger.warning("VCM addon unregistering.")
+    try:
+        vcm_activity.record(
+            'addon.disabled', 'INFO',
+            'Vertex Color Master disabled')
+    except Exception:
+        pass
 
     # tear down updater operators first (independent of core classes)
     try:

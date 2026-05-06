@@ -1,0 +1,3 @@
+{"ts": "2026-05-06 22:11:58", "event": "session.start", "severity": "INFO", "message": "VCM activity buffer started"}
+{"ts": "2026-05-06 22:11:58", "event": "addon.enabled", "severity": "INFO", "message": "Vertex Color Master enabled", "ctx": {"version": "0.11.4"}}
+{"ts": "2026-05-06 22:11:58", "event": "updater.registered", "severity": "INFO", "message": "Updater module registered", "ctx": {"channel": "STABLE", "current": "0.11.4"}}

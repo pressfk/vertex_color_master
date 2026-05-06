@@ -1,0 +1,7 @@
+{"ts": "2026-05-06 22:11:30", "event": "session.start", "severity": "INFO", "message": "VCM activity buffer started"}
+{"ts": "2026-05-06 22:11:30", "event": "addon.enabled", "severity": "INFO", "message": "Vertex Color Master enabled", "ctx": {"version": "0.11.4"}}
+{"ts": "2026-05-06 22:11:30", "event": "updater.registered", "severity": "INFO", "message": "Updater module registered", "ctx": {"channel": "STABLE", "current": "0.11.4"}}
+{"ts": "2026-05-06 22:11:44", "event": "updater.install.refused", "severity": "WARNING", "message": "Install refused — no fresh check this session", "ctx": {"channel": "STABLE"}}
+{"ts": "2026-05-06 22:11:58", "event": "report.copy.success", "severity": "INFO", "message": "Technical report copied", "ctx": {"bytes": 3885}}
+{"ts": "2026-05-06 22:11:58", "event": "report.save.success", "severity": "INFO", "message": "Technical report saved", "ctx": {"path": "C:\\Users\\PressF\\AppData\\Roaming\\Blender Foundation\\Blender\\4.5\\scripts\\addons\\vertex_color_master\\logs\\vcm_report_20260506_221158.txt", "bytes": 3977}}
+{"ts": "2026-05-06 22:11:58", "event": "addon.disabled", "severity": "INFO", "message": "Vertex Color Master disabled"}
