@@ -71,6 +71,17 @@ def _unified_settings(context):
     return getattr(ts, 'unified_paint_settings', None)
 
 
+def get_unified_paint_settings(context):
+    """Public alias for the Unified Paint Settings block."""
+    return _unified_settings(context)
+
+
+def is_unified_color_active(context):
+    """True when Unified Paint Settings drives brush color in the UI."""
+    ups = _unified_settings(context)
+    return ups is not None and bool(getattr(ups, 'use_unified_color', False))
+
+
 def get_brush_color(context, brush=None):
     """Read primary brush color; honors Unified Paint Settings if enabled."""
     if brush is None:

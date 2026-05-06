@@ -47,7 +47,7 @@ bl_info = {
         "Original: Andrew Palmer (with Bartosz Styperek). "
         "Modernized custom build: pressfk."
     ),
-    "version": (0, 11, 2),
+    "version": (0, 11, 3),
     "blender": (3, 6, 0),
     "location": "Vertex Paint | View3D > VCM",
     "description": (
@@ -410,6 +410,7 @@ classes = (
     vcm_ops.VERTEXCOLORMASTER_OT_OpenLogsFolder,
     vcm_ops.VERTEXCOLORMASTER_OT_ClearLogFile,
     vcm_ops.VERTEXCOLORMASTER_OT_CopyDiagnosticsSummary,
+    vcm_ops.VERTEXCOLORMASTER_OT_CopyBrushSyncDiagnostics,
     vcm_ops.VERTEXCOLORMASTER_OT_SaveDiagnosticsSummary,
     vcm_hud.VERTEXCOLORMASTER_OT_DrawHudLabel,
     vcm_menus.VERTEXCOLORMASTER_PT_MainPanel,

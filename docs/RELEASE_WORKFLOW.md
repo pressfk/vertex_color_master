@@ -26,6 +26,12 @@ should ship `vertex_color_master.zip`.
 2. **Release notes**
    - Add `docs/RELEASE_NOTES_vX.Y.Z.md` (concise: New / Fixes / Known
      issues / Manual test checklist).
+   - **Do NOT start the file with an H1 title** like
+     `# Vertex Color Master vX.Y.Z`. The GitHub Release title already
+     provides the main header — a duplicate H1 in the body renders an
+     ugly second title on the release page. Open with a short summary
+     line (one sentence), then jump straight into `## New`, `## Fixes`,
+     `## Known issues`, `## Manual test checklist`.
 3. **Commit**
    - `git add __init__.py docs/RELEASE_NOTES_vX.Y.Z.md`
    - `git commit -m "VCM: bump X.Y.Z"`

@@ -354,8 +354,14 @@ class VERTEXCOLORMASTER_MT_PieMain(Menu):
 
 def draw_brush_settings(context, layout, obj, settings, mode='STANDARD',
                         pie=False):
-    from .vcm_helpers import get_active_vp_brush
+    from .vcm_helpers import (
+        get_active_vp_brush,
+        get_unified_paint_settings,
+        is_unified_color_active,
+    )
     brush = get_active_vp_brush(context)
+    ups = get_unified_paint_settings(context)
+    unified = is_unified_color_active(context)
     col = layout.column()
     row = col.row()
     if pie:
@@ -381,8 +387,15 @@ def draw_brush_settings(context, layout, obj, settings, mode='STANDARD',
     else:
         row = col.row(align=True)
         if brush is not None:
-            row.prop(brush, 'color', text="")
-            row.prop(brush, 'secondary_color', text="")
+            # Bind to whichever block Blender actually paints/fills with so
+            # the VCM panel, Blender's native brush panel, X / Flip, and
+            # Fill all stay in lockstep on fresh profiles.
+            if unified and ups is not None:
+                row.prop(ups, 'color', text="")
+                row.prop(ups, 'secondary_color', text="")
+            else:
+                row.prop(brush, 'color', text="")
+                row.prop(brush, 'secondary_color', text="")
         else:
             row.label(text="No active brush", icon='INFO')
         row.separator()
@@ -402,8 +415,11 @@ def draw_brush_settings(context, layout, obj, settings, mode='STANDARD',
     row.operator('vertexcolormaster.edit_brush_settings',
                  text="Blur").blend_mode = 'BLUR'
     row = col.row(align=True)
-    row.prop(brush, 'strength', text="Strength")
-    if mode == 'STANDARD':
+    if brush is not None:
+        row.prop(brush, 'strength', text="Strength")
+    else:
+        row.label(text="Strength: <no active brush>", icon='INFO')
+    if mode == 'STANDARD' and brush is not None:
         row = col.row(align=True)
         row.prop(brush, 'use_alpha', text="Affect Alpha")
 

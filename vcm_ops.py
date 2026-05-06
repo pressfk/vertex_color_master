@@ -3055,6 +3055,114 @@ class VERTEXCOLORMASTER_OT_CopyDiagnosticsSummary(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class VERTEXCOLORMASTER_OT_CopyBrushSyncDiagnostics(bpy.types.Operator):
+    """Copy compact brush color sync diagnostics to the system clipboard"""
+    bl_idname = 'vertexcolormaster.copy_brush_sync_diagnostics'
+    bl_label = "Copy VCM Brush Sync Diagnostics"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        try:
+            text = _build_brush_sync_diagnostics(context)
+        except Exception as e:
+            log_exception("CopyBrushSyncDiagnostics build", e, context)
+            self.report({'ERROR'},
+                "Could not build brush sync diagnostics: {0}".format(e))
+            return {'CANCELLED'}
+        try:
+            context.window_manager.clipboard = text
+        except Exception as e:
+            log_exception("CopyBrushSyncDiagnostics clipboard", e, context)
+            self.report({'ERROR'},
+                "Could not copy to clipboard: {0}".format(e))
+            return {'CANCELLED'}
+        logger.info(
+            "VCM CopyBrushSyncDiagnostics: success bytes=%d", len(text))
+        vcm_hud.show_hud(
+            context, "Brush sync diagnostics copied", 'SUCCESS')
+        self.report({'INFO'},
+            "VCM brush sync diagnostics copied to clipboard.")
+        return {'FINISHED'}
+
+
+def _fmt_color(value):
+    if value is None:
+        return "<n/a>"
+    try:
+        return "({0:.4f}, {1:.4f}, {2:.4f})".format(
+            float(value[0]), float(value[1]), float(value[2]))
+    except Exception:
+        return repr(value)
+
+
+def _build_brush_sync_diagnostics(context):
+    lines = []
+    lines.append(
+        "Blender:       {0}".format(bpy.app.version_string))
+    obj = context.active_object
+    lines.append(
+        "Active object: {0}".format(obj.name if obj is not None else "<none>"))
+    lines.append(
+        "Active mode:   {0}".format(obj.mode if obj is not None else "<none>"))
+
+    brush = get_active_vp_brush(context)
+    lines.append(
+        "Active brush:  {0}".format(brush.name if brush is not None else "<none>"))
+    if brush is not None:
+        lines.append(
+            "  brush.color:           {0}".format(_fmt_color(brush.color)))
+        sec = getattr(brush, 'secondary_color', None)
+        lines.append(
+            "  brush.secondary_color: {0}".format(_fmt_color(sec)))
+
+    ts = getattr(context, 'tool_settings', None)
+    ups = getattr(ts, 'unified_paint_settings', None) if ts is not None else None
+    if ups is not None:
+        lines.append(
+            "  ups.use_unified_color: {0}".format(
+                getattr(ups, 'use_unified_color', None)))
+        lines.append(
+            "  ups.color:             {0}".format(_fmt_color(ups.color)))
+        sec = getattr(ups, 'secondary_color', None)
+        lines.append(
+            "  ups.secondary_color:   {0}".format(_fmt_color(sec)))
+    else:
+        lines.append("  unified_paint_settings: <unavailable>")
+
+    settings = getattr(context.scene, 'vertex_color_master_settings', None)
+    if settings is not None:
+        lines.append(
+            "  VCM brush_color:                   {0}".format(
+                _fmt_color(settings.brush_color)))
+        lines.append(
+            "  VCM brush_secondary_color:         {0}".format(
+                _fmt_color(settings.brush_secondary_color)))
+        lines.append(
+            "  VCM brush_value_isolate:           {0:.4f}".format(
+                float(settings.brush_value_isolate)))
+        lines.append(
+            "  VCM brush_secondary_value_isolate: {0:.4f}".format(
+                float(settings.brush_secondary_value_isolate)))
+        lines.append(
+            "  VCM use_grayscale:                 {0}".format(
+                bool(settings.use_grayscale)))
+        lines.append(
+            "  VCM active_channels:               {0}".format(
+                sorted(settings.active_channels)))
+    else:
+        lines.append("  VCM settings: <unavailable>")
+
+    iso = None
+    if obj is not None and obj.type == 'MESH' and obj.data.color_attributes:
+        ac = obj.data.color_attributes.active_color
+        if ac is not None:
+            iso = get_isolated_channel_ids(ac)
+    lines.append(
+        "  Isolate:                           {0}".format(
+            iso if iso else "<none>"))
+    return "\n".join(lines)
+
+
 class VERTEXCOLORMASTER_OT_SaveDiagnosticsSummary(bpy.types.Operator):
     """Save the VCM diagnostics summary as a timestamped .txt next to the log"""
     bl_idname = 'vertexcolormaster.save_diagnostics_summary'
